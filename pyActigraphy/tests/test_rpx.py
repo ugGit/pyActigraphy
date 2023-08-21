@@ -4,7 +4,7 @@ import pytest
 import pyActigraphy
 import inspect
 import pandas as pd
-
+from pyActigraphy.io.rpx.custom_rpx import read_custom_raw_rpx
 
 FILE = inspect.getfile(inspect.currentframe())
 data_dir = op.join(op.dirname(op.abspath(FILE)), 'data')
@@ -41,6 +41,15 @@ rawRPX_GER_with_light = pyActigraphy.io.read_raw_rpx(
     decimal=',',
     drop_na=False
 )
+
+def test_load_barmelweid():
+    barmelweid_example = 'c:/Users/i0337051/sphyncs/fitbit/analysis/sleep_metrics/barmelweid.csv'
+    # if loaded, the test is passed
+    read_custom_raw_rpx(
+        barmelweid_example,
+        language='GER',
+        file_encoding='cp1252'
+    )
 
 
 def test_read_raw_rpx_eng_name():
