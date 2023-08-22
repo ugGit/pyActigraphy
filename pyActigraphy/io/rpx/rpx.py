@@ -406,7 +406,7 @@ def read_raw_rpx(
     drop_na=True,
     file_encoding='utf-8'
 ):
-    """Reader function for raw Respironics file.
+    """Reader function for .csv file recorded by Actiwatch 2 and Actiwatch Spectrum Plus (Philips Respironics).
 
     Parameters
     ----------
