@@ -91,7 +91,8 @@ class CustomRawRPX(BaseRaw):
         # read read actigraphy data once
         with open(input_fname, mode='rt', encoding=file_encoding) as file:
             data = file.read()
-        data = data.replace('\t', '')
+        data = data.replace('\t', '') # for most barmelweid files
+        data = data.replace(';', '') # for some barmelweid files
         data = data.replace('""', '')
         data = data.replace('\r\r\n', '\r\n')
         data = data.splitlines()
