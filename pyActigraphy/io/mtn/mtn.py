@@ -95,10 +95,11 @@ class RawMTN(BaseRaw):
         else:
             stop_time = index_data.index[-1]
             period = stop_time - start_time
-
-        index_data = index_data[start_time:stop_time]
-        if index_light is not None:
-            index_light = index_light[start_time:stop_time]
+    
+        # Create a new index covering the entire desired period (even when no data is available for the period)
+        full_index = pd.date_range(start=start_time, end=stop_time, freq=frequency)
+        index_data = index_data.reindex(full_index, fill_value=pd.NA)
+        index_light = index_light.reindex(full_index, fill_value=pd.NA)
 
         # call __init__ function of the base class
         super().__init__(

@@ -452,6 +452,7 @@ class LIDS():
             # Fit data for each test period
             mri = -np.inf
             fit_result_tmp = None
+            fit_result = fit_result_tmp
             initial_period = self.__fit_initial_params['period'].value
             for test_period in test_periods:
                 # Fix test period
@@ -483,6 +484,16 @@ class LIDS():
                     mri = mri_tmp
                     # Store fit parameters
                     fit_result = fit_result_tmp
+            
+            # catch the case when mri_tmp was always smaller than mri
+            if fit_result is None:
+                fit_result = minimize(
+                    self.__fit_obj_func,
+                    self.__fit_initial_params,
+                    args=(x,  lids.values, self.lids_fit_func),
+                    nan_policy=nan_policy,
+                    reduce_fcn=self.__fit_reduc_func
+                )
 
             if verbose:
                 print('Highest MRI: {}'.format(mri))
@@ -608,7 +619,8 @@ class LIDS():
             return None
         else:
             lids_period = self.lids_fit_results.params['period']*self.freq
-            return lids_period.astype('timedelta64[{}]'.format(freq))
+            return lids_period.seconds/60
+            # return lids_period.astype('timedelta64[{}]'.format(freq))
 
     def lids_phases(self, lids, step=.1):
         r'''LIDS onset and offset phases in degrees
@@ -686,13 +698,11 @@ class LIDS():
             periods=lids.index.size,
             freq=self.freq
         )
-
-        # Scaling factor, relative to the LIDS period, normalized to t_norm
-        scaling_factor = pd.Timedelta(t_norm)/self.lids_period()
-
-        # Internal timeline (aka: external timeline, rescaled to LIDS period)
-        # t_int = scaling_factor*t_ext
-        t_int = pd.TimedeltaIndex(scaling_factor*t_ext.values, freq='infer')
+        t_int = pd.timedelta_range(
+            start='0 day',
+            periods=lids.index.size,
+            freq=pd.Timedelta(t_norm)/self.lids_period()
+        )
 
         # Construct a new Series with internal timeline as index
         lids_rescaled = pd.Series(lids.values, index=t_int)
@@ -736,6 +746,10 @@ class LIDS():
         for idx, s in enumerate(lids):
             # Fit LIDS data
             self.lids_fit(s, verbose=False)
+            
+            # check amplitude of fit, skip if not valid
+            if abs(self.lids_fit_results.params   ['amp'].value) < 1e-3:
+                continue
 
             # Verify LIDS period
             period = self.lids_period(freq='s')
@@ -745,7 +759,7 @@ class LIDS():
 
             # Calculate the number of LIDS cycle (as sleep bout length/period):
             ncycle = s.index.values.ptp()/np.timedelta64(1, 's')
-            ncycle /= period.astype(float)
+            ncycle /= period
 
             if verbose:
                 print('-'*20)
@@ -777,11 +791,9 @@ class LIDS():
 
         # LIDS summary
         summary = {}
-        summary['Mean number of LIDS cycles'] = np.mean(ncycles)
-        summary['Mean LIDS period (s)'] = np.mean(periods).astype(float)
-        summary['Mean MRI'] = np.mean(mris)
-        summary[
-            'LIDS dampening factor (counts/{})'.format(self.freq)
-        ] = fit_params[0]
+        summary['n_cycles'] = np.mean(ncycles)
+        summary['period'] = np.mean(periods).astype(float)
+        summary['mri'] = np.mean(mris)
+        summary['dampening'] = fit_params[0]
 
         return summary

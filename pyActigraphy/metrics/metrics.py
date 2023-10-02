@@ -712,7 +712,7 @@ class MetricsMixin(object):
                 lowest=True
             ) for time in intervals
         ]
-        return [res[1] for res in results]
+        return results
 
     def M10p(self, period='7D', binarize=True, threshold=4, verbose=False):
         r"""M10 per period
@@ -789,7 +789,7 @@ class MetricsMixin(object):
                 lowest=False
             ) for time in intervals
         ]
-        return [res[1] for res in results]
+        return results
 
     def RAp(self, period='7D', binarize=True, threshold=4, verbose=False):
         r"""RA per period
