@@ -19,6 +19,7 @@ from .awd import read_raw_awd
 from .bba import read_raw_bba
 from .dqt import read_raw_dqt
 from .ftb import read_raw_ftb
+from .ftb_sphyncs import read_raw_ftb_sphyncs
 from .mesa import read_raw_mesa
 from .mtn import read_raw_mtn
 from .rpx import read_raw_rpx
@@ -34,6 +35,7 @@ __all__ = [
     "read_raw_bba",
     "read_raw_dqt",
     "read_raw_ftb",
+    "read_raw_ftb_sphyncs",
     "read_raw_mesa",
     "read_raw_mtn",
     "read_raw_rpx",
