@@ -157,7 +157,7 @@ class RawFTB(BaseRaw):
 
     def __reading_and_parsing_file(self, path_to_fitbit):
         """ Load the raw data from JSON file"""
-        url = path_to_fitbit + '/Global Export Data/'
+        url = os.path.join(path_to_fitbit, 'Global Export Data')
         
         # search for file names starting with 'calories'
         df_calories = self.__load_fitbit_json(url, 'calories')
