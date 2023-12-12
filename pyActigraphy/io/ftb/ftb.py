@@ -192,6 +192,8 @@ class RawFTB(BaseRaw):
         df['heart']    = self.__preprocess_minmax(df, 'heart')
         # normalize the calories by removing the baseline followed by min-max scaling
         df['calories'] = self.__preprocess_calories(df, 'calories')
+        # test for zero baseline in calories
+        self.__test_zero_baseline(df, 'calories')
         return df
     
     def __preprocess_zeros_to_nan(self, df, var):
@@ -242,6 +244,16 @@ class RawFTB(BaseRaw):
         # add length as last 'edge' to define the segments
         edges = np.append(edges, len(baseline))
         return edges
+    
+    def __test_zero_baseline(self, df, var):
+        """ test that the baseline is actually zero """
+        # get baseline
+        baseline = self.__get_baseline(df, var)
+        # get indeces of the segments
+        edges = self.__get_baseline_edges(baseline)
+        # test (2 edges are expected due to start and end of signal)
+        if len(edges) > 2:
+            raise ValueError(f'The baseline of {var} is not at constant zero! Detected {len(edges)-2} edges.')
 
 
 def read_raw_ftb(
