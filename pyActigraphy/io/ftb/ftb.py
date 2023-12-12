@@ -192,8 +192,6 @@ class RawFTB(BaseRaw):
         df['heart']    = self.__preprocess_minmax(df, 'heart')
         # normalize the calories by removing the baseline followed by min-max scaling
         df['calories'] = self.__preprocess_calories(df, 'calories')
-        # test for zero baseline in calories
-        self.__test_zero_baseline(df, 'calories')
         return df
     
     def __preprocess_zeros_to_nan(self, df, var):
@@ -219,15 +217,8 @@ class RawFTB(BaseRaw):
         baseline = self.__get_baseline(df, var)
         # subtract baseline from data    
         df[var] = df[var] - baseline.values
-        # get indeces of the segments
-        edges = self.__get_baseline_edges(baseline)
-        #extract segments according to the edges
-        segments = [df.iloc[start:end] for start, end in zip(edges[:-1], edges[1:])]
-        #normalize the segments
-        normalized_segments = [self.__preprocess_minmax(segment.copy(), var) for segment in segments]
-        # update the original df
-        for i, (start, end) in enumerate(zip(edges[:-1], edges[1:])):
-            df.loc[df.index[start:end], var] =normalized_segments[i]
+        # normalize by min-max scaling
+        df[var] = self.__preprocess_minmax(df, var)
         return df[var]    
     
     def __get_baseline(self, df, var):
@@ -236,25 +227,6 @@ class RawFTB(BaseRaw):
         daily_offset = df.groupby(df.index.date)[var].min()
         baseline = pd.Series(df.index.date).map(daily_offset)
         return baseline
-    
-    def __get_baseline_edges(self, baseline):
-        """ get the indeces of edges of the baseline """
-        # get indeces of the edges
-        edges = np.where(baseline.diff() != 0)[0]
-        # add length as last 'edge' to define the segments
-        edges = np.append(edges, len(baseline))
-        return edges
-    
-    def __test_zero_baseline(self, df, var):
-        """ test that the baseline is actually zero """
-        # get baseline
-        baseline = self.__get_baseline(df, var)
-        # get indeces of the segments
-        edges = self.__get_baseline_edges(baseline)
-        # test (2 edges are expected due to start and end of signal)
-        if len(edges) > 2:
-            raise ValueError(f'The baseline of {var} is not at constant zero! Detected {len(edges)-2} edges.')
-
 
 def read_raw_ftb(
     path_to_fitbit,
