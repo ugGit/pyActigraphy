@@ -5,6 +5,7 @@ import os
 from lxml import etree
 from ..base import BaseRaw
 from pyActigraphy.light import LightRecording
+import matplotlib.pyplot as plt
 
 
 class RawFTB(BaseRaw):
@@ -40,7 +41,8 @@ class RawFTB(BaseRaw):
     ):
         
         # read csv file
-        raw_data = self.__reading_and_parsing_file(path_to_fitbit)
+        self._url = path_to_fitbit
+        raw_data = self.__reading_and_parsing_file()
         raw_data = self.__preprocess_raw_data(raw_data)
 
         # extract informations from the header
@@ -118,17 +120,19 @@ class RawFTB(BaseRaw):
         else:
             return self.light.get_channel("whitelight")
         
-    def __get_fnames(self, url, prefix):
+    def __get_fnames(self, prefix):
+        """ Get a list of all available JSON files for the given sensor type ('calories' | 'heart'). """
         # Get a list of filenames in the directory
-        file_list = os.listdir(url)
+        file_list = os.listdir(self._url)
         
         # Filter the filenames to select only JSON files with the given prefix
         fnames = [filename for filename in file_list if filename.startswith(prefix) and filename.endswith('.json')]
         return fnames
     
-    def __load_fitbit_json(self, url, prefix):
+    def __load_fitbit_json(self, prefix):
+        """ Open and read the JSON file. Save as pandas.DataFrame and resample to 1 minute resolution. """
         # get filenames
-        fnames = self.__get_fnames(url, prefix)
+        fnames = self.__get_fnames(prefix)
         
         # Initialize an empty DataFrame to store the combined data
         df = pd.DataFrame()
@@ -136,7 +140,7 @@ class RawFTB(BaseRaw):
         # loop over all files
         for fname in fnames:
             # make file path
-            file_path = os.path.join(url, fname)
+            file_path = os.path.join(self._url, fname)
             
             # open the JSON file
             with open(file_path, 'r') as json_file:
@@ -155,16 +159,12 @@ class RawFTB(BaseRaw):
         df = df.resample('1T').mean()
         return df       
 
-    def __reading_and_parsing_file(self, path_to_fitbit):
-        """ Load the raw data from JSON file"""
-        url = os.path.join(path_to_fitbit, 'Global Export Data')
-        
+    def __reading_and_parsing_file(self):
+        """ Load the raw data from JSON file """
         # search for file names starting with 'calories'
-        df_calories = self.__load_fitbit_json(url, 'calories')
-        
-        # search for file names starting with 'calories'
-        df_heart = self.__load_fitbit_json(url, 'heart')
-        
+        df_calories = self.__load_fitbit_json('calories')
+        # search for file names starting with 'heart'
+        df_heart = self.__load_fitbit_json('heart')
         return pd.concat([df_calories, df_heart], axis=1)
 
     def __extract_ftb_start_time(self, df):
@@ -176,7 +176,7 @@ class RawFTB(BaseRaw):
         return pd.Timedelta(1, unit=pd.infer_freq(df.index[:3]))
 
     def __extract_activity_data(self, df):
-        """ Extract calories as surrogate activity measurement from the raw dataframe"""
+        """ Extract calories as surrogate activity measurement from the raw dataframe """
         return df['calories']
 
     def __extract_light_data(self, df):
@@ -184,21 +184,64 @@ class RawFTB(BaseRaw):
         return df['heart']
     
     def __preprocess_raw_data(self, df):
-        # normalize the calories
-        df['calories'] = self.__preprocess_minmax(df, 'calories')
-        # normalize the heart
+        """ Normalize the calories and heart rate. """
+        # replace zero values by nan 
+        df['heart']    = self.__preprocess_zeros_to_nan(df, 'heart')
+        df['calories'] = self.__preprocess_zeros_to_nan(df, 'calories') 
+        # normalize the heart rate by min-max scaling
         df['heart']    = self.__preprocess_minmax(df, 'heart')
+        # normalize the calories by removing the baseline followed by min-max scaling
+        df['calories'] = self.__preprocess_calories(df, 'calories')
         return df
     
-    def __preprocess_minmax(self, df, var):      
-        # set zero values to NaN
+    def __preprocess_zeros_to_nan(self, df, var):
+        """ set zero values to nan """
+        # get index of zero values
         to_nan = (df[var] <= 0)  
+        # get column index of variable
         col_idx = df.columns.get_loc(var)
+        # set zero values to NaN
         df.iloc[to_nan, col_idx] = np.nan
+        return df[var]
+        
+    def __preprocess_minmax(self, df, var):      
+        """ Normalize the data by subtracting the minimum and dividng by the maximum. """
         # apply min-max scaling
         df[var] -= df[var].min()
         df[var] /= df[var].max()
         return df[var]
+    
+    def __preprocess_calories(self, df, var):
+        """ Normalize the calories in segments."""
+        # get baseline
+        baseline = self.__get_baseline(df, var)
+        # subtract baseline from data    
+        df[var] = df[var] - baseline.values
+        # get indeces of the segments
+        edges = self.__get_baseline_edges(baseline)
+        #extract segments according to the edges
+        segments = [df.iloc[start:end] for start, end in zip(edges[:-1], edges[1:])]
+        #normalize the segments
+        normalized_segments = [self.__preprocess_minmax(segment.copy(), var) for segment in segments]
+        # update the original df
+        for i, (start, end) in enumerate(zip(edges[:-1], edges[1:])):
+            df.loc[df.index[start:end], var] =normalized_segments[i]
+        return df[var]    
+    
+    def __get_baseline(self, df, var):
+        """ estimate the baseline. """
+        # get daily baseline
+        daily_offset = df.groupby(df.index.date)[var].min()
+        baseline = pd.Series(df.index.date).map(daily_offset)
+        return baseline
+    
+    def __get_baseline_edges(self, baseline):
+        """ get the indeces of edges of the baseline """
+        # get indeces of the edges
+        edges = np.where(baseline.diff() != 0)[0]
+        # add length as last 'edge' to define the segments
+        edges = np.append(edges, len(baseline))
+        return edges
 
 
 def read_raw_ftb(
