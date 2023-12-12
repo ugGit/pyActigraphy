@@ -5,6 +5,7 @@ import os
 from lxml import etree
 from ..base import BaseRaw
 from pyActigraphy.light import LightRecording
+import matplotlib.pyplot as plt
 
 
 class RawFTB_SPHYNCS(BaseRaw):
@@ -170,26 +171,48 @@ class RawFTB_SPHYNCS(BaseRaw):
         df.iloc[to_zero, steps_idx] = 0
         return df
     
-    def __preprocess_calories_data(self, df):      
-        # set zero values to NaN
-        to_nan = (df['calories'] <= 0)  
-        cals_idx = df.columns.get_loc("calories")
-        df.iloc[to_nan, cals_idx] = np.nan
-        # apply min-max scaling
-        df['calories'] -= df['calories'].min()
-        df['calories'] /= df['calories'].max()
-        return df
-        return df
+    def __preprocess_calories_data(self, df, var='calories'):
+        """ Normalize the calories in segments."""
+        # set zeros to nan
+        df= self.__preprocess_zeros_to_nan(df, 'calories') 
+        # get baseline
+        baseline = self.__get_baseline(df, var)
+        # subtract baseline from data    
+        df[var] = df[var] - baseline.values
+        # normalize by min-max scaling
+        df[var] = self.__preprocess_minmax(df, var)
+        return df   
     
     def __preprocess_heart_data(self, df):      
         # set zero values to NaN
-        to_nan = (df['heart'] <= 0)  
-        cals_idx = df.columns.get_loc("heart")
-        df.iloc[to_nan, cals_idx] = np.nan
+        df= self.__preprocess_zeros_to_nan(df, 'heart') 
         # apply min-max scaling
-        df['heart'] -= df['heart'].min()
-        df['heart'] /= df['heart'].max()
+        df['heart'] = self.__preprocess_minmax(df, 'heart')
         return df
+    
+    def __get_baseline(self, df, var):
+        """ estimate the baseline. """
+        # get daily baseline
+        daily_offset = df.groupby(df.index.date)[var].min()
+        baseline = pd.Series(df.index.date).map(daily_offset)
+        return baseline
+        
+    def __preprocess_zeros_to_nan(self, df, var):
+        """ set zero values to nan """
+        # get index of zero values
+        to_nan = (df[var] <= 0)  
+        # get column index of variable
+        col_idx = df.columns.get_loc(var)
+        # set zero values to NaN
+        df.iloc[to_nan, col_idx] = np.nan
+        return df
+        
+    def __preprocess_minmax(self, df, var):      
+        """ Normalize the data by subtracting the minimum and dividng by the maximum. """
+        # apply min-max scaling
+        df[var] -= df[var].min()
+        df[var] /= df[var].max()
+        return df[var]
 
 
 def read_raw_ftb_sphyncs(
