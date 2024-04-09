@@ -6,6 +6,7 @@ from lxml import etree
 from ..base import BaseRaw
 from pyActigraphy.light import LightRecording
 import matplotlib.pyplot as plt
+from .phrr import phrr
 
 
 class RawFTB_SPHYNCS(BaseRaw):
@@ -37,11 +38,17 @@ class RawFTB_SPHYNCS(BaseRaw):
         raw_data,
         activity,
         start_time=None,
-        period=None
+        period=None,
+        age=None
     ):
 
         if type(raw_data) != pd.DataFrame:
             raise TypeError('Input <raw_data> must be a pandas.DataFrame.')
+        
+        # set age
+        if age is None:
+            raise ValueError('Age must be provided.')
+        self.age = age
 
         # read csv file
         raw_data = self.__reading_and_parsing_file(raw_data)
@@ -143,7 +150,7 @@ class RawFTB_SPHYNCS(BaseRaw):
         try: 
             activity_data = df[activity]
         except:
-            raise ValueError('"activity" must be "calories", "steps", or "heart"')
+            raise ValueError('"activity" must be "calories", "steps", "heart", or "phrr"')
         return activity_data
 
     def __extract_light_data(self, df):
@@ -161,6 +168,8 @@ class RawFTB_SPHYNCS(BaseRaw):
         df = self.__preprocess_calories_data(df)
         # normalize the heart
         df = self.__preprocess_heart_data(df)
+        # calculate the phrr
+        df['phrr'] = phrr(df['heart'], df['steps'], self.age)
         return df
     
     def __preprocess_steps_data(self, df):        
@@ -219,7 +228,8 @@ def read_raw_ftb_sphyncs(
     raw_data,
     activity,
     start_time=None,
-    period=None
+    period=None,
+    age=None
 ):
     """Reader function for raw .csv file recorded by MotionWatch 8 (CamNtech).
 
@@ -247,5 +257,6 @@ def read_raw_ftb_sphyncs(
         raw_data=raw_data,
         activity=activity,
         start_time=start_time,
-        period=period
+        period=period,
+        age=age
     )
